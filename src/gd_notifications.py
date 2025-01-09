@@ -34,13 +34,6 @@ def format_game_data(game):
             f"Last Play: {last_play}\n"
             f"Channel: {channel}\n"
         )
-    elif status == "Scheduled":
-        return (
-            f"Game Status: {status}\n"
-            f"{away_team} vs {home_team}\n"
-            f"Start Time: {start_time}\n"
-            f"Channel: {channel}\n"
-        )
     else:
         return (
             f"Game Status: {status}\n"
@@ -73,16 +66,19 @@ def lambda_handler(event, context):
         print(f"Error fetching data from API: {e}")
         return {"statusCode": 500, "body": "Error fetching data"}
     
-    # Include all games (final, in-progress, and scheduled)
-    messages = [format_game_data(game) for game in data]
-    final_message = "\n---\n".join(messages) if messages else "No games available for today."
+    # Filter only final games
+    final_games = [game for game in data if game.get("Status") == "Final"]
+    
+    # Format the results
+    messages = [format_game_data(game) for game in final_games]
+    final_message = "\n---\n".join(messages) if messages else "No final games available for today."
     
     # Publish to SNS
     try:
         sns_client.publish(
             TopicArn=sns_topic_arn,
             Message=final_message,
-            Subject="NBA Game Updates"
+            Subject="NBA Game Scores"
         )
         print("Message published to SNS successfully.")
     except Exception as e:
