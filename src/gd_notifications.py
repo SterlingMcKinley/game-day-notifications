@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 import boto3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 def format_game_data(game):
     status = game.get("Status", "Unknown")
@@ -16,6 +16,7 @@ def format_game_data(game):
     quarters = game.get("Quarters", [])
     quarter_scores = ', '.join([f"Q{q['Number']}: {q.get('AwayScore', 'N/A')}-{q.get('HomeScore', 'N/A')}" for q in quarters])
     
+    # Create the game string
     if status == "Final":
         return (
             f"Game Status: {status}\n"
@@ -47,31 +48,22 @@ def lambda_handler(event, context):
     sns_topic_arn = os.getenv("SNS_TOPIC_ARN")
     sns_client = boto3.client("sns")
     
-    # Adjust for Central Time (UTC-6)
-    utc_now = datetime.now(timezone.utc)
-    central_time = utc_now - timedelta(hours=6)  # Central Time is UTC-6
-    today_date = central_time.strftime("%Y-%m-%d")
-    
+    # Get today's date in the format YYYY-MM-DD
+    today_date = datetime.now().strftime("%Y-%m-%d")
     print(f"Fetching games for date: {today_date}")
     
     # Fetch data from the API
-    api_url = f"https://api.sportsdata.io/v3/nba/scores/json/GamesByDate/{today_date}?key={api_key}"
-    print(today_date)
-     
+    api_url = f"https://api.sportsdata.io/v3/nba/scores/json/GamesByDateFinal/{today_date}?key={api_key}"
     try:
         with urllib.request.urlopen(api_url) as response:
             data = json.loads(response.read().decode())
-            print(json.dumps(data, indent=4))  # Debugging: log the raw data
     except Exception as e:
         print(f"Error fetching data from API: {e}")
         return {"statusCode": 500, "body": "Error fetching data"}
     
-    # Filter only final games
-    final_games = [game for game in data if game.get("Status") == "Final"]
-    
     # Format the results
-    messages = [format_game_data(game) for game in final_games]
-    final_message = "\n---\n".join(messages) if messages else "No final games available for today."
+    messages = [format_game_data(game) for game in data]
+    final_message = "\n---\n".join(messages)
     
     # Publish to SNS
     try:
